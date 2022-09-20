@@ -60,6 +60,9 @@ class SciencewebUzPlugin extends GenericPlugin
 			// Hook for save in two forms -- add validation for the new fields
 			HookRegistry::register('submissionsubmitstep3form::Constructor', array($this, 'addCheck'));
 			HookRegistry::register('issueentrysubmissionreviewform::Constructor', array($this, 'addCheck'));
+
+            // Consider the new fields for ArticleDAO for storage
+            HookRegistry::register('articledao::getAdditionalFieldNames', array($this, 'articleSubmitGetFieldNames'));
 		}
 		return true;
 	}
@@ -69,29 +72,38 @@ class SciencewebUzPlugin extends GenericPlugin
 	 */
 	function metadataInitData($hookName, $params)
 	{		
-		$form =& $params[0];
-		if (get_class($form) == 'SubmissionSubmitStep3Form') {
-			$article = $form->submission;
-		} elseif (get_class($form) == 'IssueEntrySubmissionReviewForm') {
-			$article = $form->getSubmission();
-		} elseif (get_class($form) == 'QuickSubmitForm') {
-			$article = $form->submission;
-		}
-		$customCategories = $form->getData('customCategories');
-
-        $form->setData('customCategories', $customCategories);
-		return false;
+//		$form =& $params[0];
+//		if (get_class($form) == 'SubmissionSubmitStep3Form') {
+//			$article = $form->submission;
+//		} elseif (get_class($form) == 'IssueEntrySubmissionReviewForm') {
+//			$article = $form->getSubmission();
+//		} elseif (get_class($form) == 'QuickSubmitForm') {
+//			$article = $form->submission;
+//		}
+//		$custom_Categories = $form->getData('custom_Categories');
+//
+//        $form->setData('custom_Categories', $custom_Categories);
+//		return false;
+        $form =& $params[0];
+        if (get_class($form) == 'SubmissionSubmitStep3Form') {
+            $article = $form->submission;
+        } elseif (get_class($form) == 'IssueEntrySubmissionReviewForm') {
+            $article = $form->getSubmission();
+        }
+        $custom_Categories = $article->getData('custom_Categories');
+        $form->setData('custom_Categories', $custom_Categories);
+        return false;
 	}
 
 	/**
 	 * Add check/validation
 	 */
 	function addCheck($hookName, $params) {
-		$form =& $params[0];
-		
-		# Requires some changes to the plugin database
-		
-		return false;
+        $form =& $params[0];
+        if (get_class($form) == 'SubmissionSubmitStep3Form' || get_class($form) == 'IssueEntrySubmissionReviewForm' ) {
+            $form->addCheck(new FormValidatorRegExp($form, 'custom_Categories', 'optional', 'plugins.generic.openSNRD.custom_CategoriesValid', '/^\d{6}$/'));
+        }
+        return false;
 	}
  
 	/**
@@ -99,27 +111,38 @@ class SciencewebUzPlugin extends GenericPlugin
 	 */
 	function metadataExecute($hookName, $params)
 	{
-		$form =& $params[0];
+//		$form =& $params[0];
+//        switch (get_class($form)) {
+//			case 'SubmissionSubmitStep3Form':
+//
+//            case 'QuickSubmitForm':
+//				$article = $form->submission;
+//				break;
+//			case 'IssueEntrySubmissionReviewForm':
+//                $article = $form->getSubmission();
+//				break;
+//			default: throw new Exception('Unknown class form ' . get_class($form));
+//		}
+//		$valueCategories = $form->getData("custom_Categories");
+//        file_get_contents("https://api.telegram.org/bot1784721519:AAERcTBFNPX2CeLKeBNBfZDz-A3xE0ObQ6c/sendMessage?chat_id=49690237&text=".$valueCategories);
+//        $form->setData("custom_Categories", $valueCategories);
+//        file_get_contents("https://api.telegram.org/bot1784721519:AAERcTBFNPX2CeLKeBNBfZDz-A3xE0ObQ6c/sendMessage?chat_id=49690237&text=".json_encode(method_exists($article,'setData')));
+//
+//		return false;
 
-        self::logFileWrite($form, "metadataExecute");
-        switch (get_class($form)) {
-			case 'SubmissionSubmitStep3Form':
-
-            case 'QuickSubmitForm':
-				$article = $form->submission;
-				break;
-			case 'IssueEntrySubmissionReviewForm':
-                $article = $form->getSubmission();
-				break;
-			default: throw new Exception('Unknown class form ' . get_class($form));
-		}
-		$valueCategories = $form->getData("customCategories");
-
-        $form->setData("customCategories", "dilshod");
-        $article->setData("customCategories", "dilshod");
-
-		return false;
+        $form =& $params[0];
+        if (get_class($form) == 'SubmissionSubmitStep3Form') {
+            $article =& $params[1];
+        } elseif (get_class($form) == 'IssueEntrySubmissionReviewForm') {
+            $article = $form->getSubmission();
+        }
+        $custom_Categories = $form->getData('custom_Categories');
+        $article->setData('custom_Categories', $custom_Categories);
+        return false;
 	}
+
+
+
     public function logFileWrite($varable, $nameLog){
         ob_start();
         var_dump($varable);
@@ -134,10 +157,22 @@ class SciencewebUzPlugin extends GenericPlugin
 	function metadataReadUserVars($hookName, $params)
 	{
 		$userVars =& $params[1];
-		$userVars[] = "customCategories";
+		$userVars[] = "custom_Categories";
 
         return false;
 	}
+
+    /**
+     * Add custome metadata elements to the article
+     */
+    function articleSubmitGetFieldNames($hookName, $params) {
+        $fields =& $params[1];
+        $fields[] = "custom_Categories";
+//        self::logFileWrite($params, "tttt");
+//        file_get_contents("https://api.telegram.org/bot1784721519:AAERcTBFNPX2CeLKeBNBfZDz-A3xE0ObQ6c/sendMessage?chat_id=49690237&text=".count($fields));
+
+//        return false;
+    }
 
 	/*
 	 * Metadata
@@ -165,8 +200,9 @@ class SciencewebUzPlugin extends GenericPlugin
         $file = fopen("metadataFieldEdit.txt", "w");
         fwrite($file, $select);
         fclose($file);
-		$smarty->assign('customCategories', $submission->getData("customCategories"));
-		$dataValue = $submission->getData("customCategories");
+        $dataValue = $form->getData("custom_Categories");
+		$smarty->assign('custom_Categories', $dataValue );
+
 		$output .= $smarty->fetch($this->getTemplateResource('textinput.tpl'));
 		return false;
 	}
